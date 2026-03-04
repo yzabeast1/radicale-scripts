@@ -3,7 +3,6 @@
 #include <filesystem>
 #include <fstream>
 #include <iostream>
-#include <random>
 #include <regex>
 #include <sstream>
 #include <unordered_map>
@@ -146,21 +145,19 @@ std::string decode_quoted_printable(const std::string& text) {
     return out;
 }
 
-std::string random_suffix(std::size_t length) {
-    static constexpr char charset[] =
-        "abcdefghijklmnopqrstuvwxyz"
-        "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
-        "0123456789";
+std::string hash_hex_fnv1a_64(const std::string& text) {
+    constexpr std::uint64_t offset_basis = 1469598103934665603ULL;
+    constexpr std::uint64_t prime = 1099511628211ULL;
 
-    thread_local std::mt19937_64 rng(std::random_device{}());
-    std::uniform_int_distribution<std::size_t> dist(0, sizeof(charset) - 2);
-
-    std::string out;
-    out.reserve(length);
-    for (std::size_t i = 0; i < length; ++i) {
-        out.push_back(charset[dist(rng)]);
+    std::uint64_t hash = offset_basis;
+    for (unsigned char ch : text) {
+        hash ^= static_cast<std::uint64_t>(ch);
+        hash *= prime;
     }
-    return out;
+
+    std::ostringstream stream;
+    stream << std::hex << hash;
+    return stream.str();
 }
 
 std::string normalized_date(const std::smatch& match) {
@@ -178,8 +175,8 @@ std::string normalized_date(const std::smatch& match, std::size_t year_index, st
     return year + match[month_index].str() + match[day_index].str();
 }
 
-std::string make_event(const std::string& date, const std::string& summary) {
-    const std::string uid = date + "-" + random_suffix(16) + "@VCFtoICS.com";
+std::string make_event(const std::string& date, const std::string& summary, const std::string& uid_seed) {
+    const std::string uid = hash_hex_fnv1a_64(uid_seed) + "@VCFtoICS.com";
     std::ostringstream event;
     event << "BEGIN:VEVENT\n"
           << "DTSTART:" << date << "\n"
@@ -232,6 +229,15 @@ std::vector<std::string> extract_ios_anniversaries(const std::string& card) {
     return anniversaries;
 }
 
+std::string extract_vcard_uid(const std::string& card) {
+    const std::regex uid_re(R"(UID(?::|;[^:\r\n]*:)([^\r\n]*))", std::regex_constants::icase);
+    std::smatch uid_match;
+    if (!std::regex_search(card, uid_match, uid_re)) {
+        return {};
+    }
+    return decode_quoted_printable(uid_match[1].str());
+}
+
 ConvertResult convert_one_file(const std::filesystem::path& input_path, const std::filesystem::path& output_dir, const std::string& calendar_name) {
     const std::string file_content = read_file(input_path);
     if (file_content.empty() && std::filesystem::file_size(input_path) > 0) {
@@ -244,13 +250,15 @@ ConvertResult convert_one_file(const std::filesystem::path& input_path, const st
     const std::regex name_re(R"(FN(?::|;[^:\r\n]*:)([^\r\n]*))", std::regex_constants::icase);
 
     const auto cards = split_vcards(file_content);
+    const std::string source_name = input_path.filename().string();
     int birthday_count = 0;
     int anniversary_count = 0;
     std::vector<std::string> birthday_events;
     std::vector<std::string> anniversary_events;
     std::unordered_set<std::string> anniversary_keys;
 
-    for (const auto& card : cards) {
+    for (std::size_t card_index = 0; card_index < cards.size(); ++card_index) {
+        const auto& card = cards[card_index];
         std::smatch name_match;
 
         if (!std::regex_search(card, name_match, name_re)) {
@@ -258,12 +266,18 @@ ConvertResult convert_one_file(const std::filesystem::path& input_path, const st
         }
 
         std::string name = decode_quoted_printable(name_match[1].str());
+        const std::string vcard_uid = extract_vcard_uid(card);
+        const std::string card_identity = vcard_uid.empty()
+            ? ("index:" + std::to_string(card_index) + "|name:" + name)
+            : ("uid:" + vcard_uid);
 
         std::smatch birthday_match;
         if (std::regex_search(card, birthday_match, birthday_re)) {
             const std::string birthday = normalized_date(birthday_match);
             std::cout << name << " birthday: " << birthday << "\n";
-            birthday_events.push_back(make_event(birthday, name + "'s Birthday"));
+            const std::string summary = name + "'s Birthday";
+            const std::string uid_seed = "birthday|" + source_name + "|" + card_identity + "|" + birthday;
+            birthday_events.push_back(make_event(birthday, summary, uid_seed));
             ++birthday_count;
         }
 
@@ -273,7 +287,9 @@ ConvertResult convert_one_file(const std::filesystem::path& input_path, const st
             const std::string key = name + "|" + anniversary;
             if (anniversary_keys.insert(key).second) {
                 std::cout << name << " anniversary: " << anniversary << "\n";
-                anniversary_events.push_back(make_event(anniversary, name + "'s Anniversary"));
+                const std::string summary = name + "'s Anniversary";
+                const std::string uid_seed = "anniversary|" + source_name + "|" + card_identity + "|" + anniversary;
+                anniversary_events.push_back(make_event(anniversary, summary, uid_seed));
                 ++anniversary_count;
             }
         }
@@ -283,7 +299,9 @@ ConvertResult convert_one_file(const std::filesystem::path& input_path, const st
             const std::string key = name + "|" + anniversary;
             if (anniversary_keys.insert(key).second) {
                 std::cout << name << " anniversary: " << anniversary << "\n";
-                anniversary_events.push_back(make_event(anniversary, name + "'s Anniversary"));
+                const std::string summary = name + "'s Anniversary";
+                const std::string uid_seed = "anniversary|" + source_name + "|" + card_identity + "|" + anniversary;
+                anniversary_events.push_back(make_event(anniversary, summary, uid_seed));
                 ++anniversary_count;
             }
         }
