@@ -30,7 +30,7 @@ make
 
 - A task is treated as complete when `STATUS:COMPLETED` exists.
 - Completion date is read from the `COMPLETED:` property (supports date/datetime values like `20260301` or `20260301T101500Z`, date portion used).
-- A completed task is archived only when all known ancestors and descendants (`RELATED-TO` task chain) are also completed.
+- A completed task is archived only when all known tasks in its connected `RELATED-TO` tree are also old enough to pass the same `--days` threshold.
 - The relative folder structure under `--source` is preserved under `--archive`.
 - If a direct rename fails (for example across filesystems), the tool falls back to copy-then-remove.
 
@@ -64,3 +64,5 @@ Expected to stay (blocked by incomplete relatives):
 - `ancestor-child-completed.ics`
 - `descendant-root-completed.ics`
 - `descendant-child-completed.ics`
+- `recent-linked-old-completed.ics` (blocked by connected recent completion)
+- `recent-linked-new-completed.ics` (not old enough yet)

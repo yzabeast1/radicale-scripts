@@ -1,0 +1,11 @@
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Old Tasks Fixture//EN
+BEGIN:VTODO
+UID:recent-linked-new-completed
+DTSTAMP:20260301T000000Z
+SUMMARY:Recently completed task that blocks connected old task
+STATUS:COMPLETED
+COMPLETED:20260303T000000Z
+END:VTODO
+END:VCALENDAR

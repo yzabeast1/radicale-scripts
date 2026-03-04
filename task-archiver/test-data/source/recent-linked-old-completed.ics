@@ -1,0 +1,12 @@
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Old Tasks Fixture//EN
+BEGIN:VTODO
+UID:recent-linked-old-completed
+DTSTAMP:20240101T000000Z
+SUMMARY:Old completed task linked to a recent completed task
+STATUS:COMPLETED
+COMPLETED:20240103T000000Z
+RELATED-TO;RELTYPE=PARENT:recent-linked-new-completed
+END:VTODO
+END:VCALENDAR

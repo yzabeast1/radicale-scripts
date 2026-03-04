@@ -194,76 +194,6 @@ TaskMetadata parseTaskMetadata(const fs::path& filePath) {
     return result;
 }
 
-bool hasIncompleteAncestor(const TaskMetadata& task, const std::unordered_map<std::string, TaskMetadata>& metadataByUid) {
-    std::vector<std::string> pending = task.parentUids;
-    std::unordered_set<std::string> visited;
-
-    while (!pending.empty()) {
-        std::string ancestorUid = pending.back();
-        pending.pop_back();
-
-        if (ancestorUid.empty() || !visited.insert(ancestorUid).second) {
-            continue;
-        }
-
-        auto it = metadataByUid.find(ancestorUid);
-        if (it == metadataByUid.end()) {
-            continue;
-        }
-
-        const TaskMetadata& ancestor = it->second;
-        if (!ancestor.state.isCompleted) {
-            return true;
-        }
-
-        pending.insert(pending.end(), ancestor.parentUids.begin(), ancestor.parentUids.end());
-    }
-
-    return false;
-}
-
-bool hasIncompleteDescendant(
-    const TaskMetadata& task,
-    const std::unordered_map<std::string, std::vector<std::string>>& childUidsByParentUid,
-    const std::unordered_map<std::string, TaskMetadata>& metadataByUid) {
-    if (task.uid.empty()) {
-        return false;
-    }
-
-    std::vector<std::string> pending;
-    if (auto it = childUidsByParentUid.find(task.uid); it != childUidsByParentUid.end()) {
-        pending = it->second;
-    }
-
-    std::unordered_set<std::string> visited;
-
-    while (!pending.empty()) {
-        std::string descendantUid = pending.back();
-        pending.pop_back();
-
-        if (descendantUid.empty() || !visited.insert(descendantUid).second) {
-            continue;
-        }
-
-        auto descendantIt = metadataByUid.find(descendantUid);
-        if (descendantIt == metadataByUid.end()) {
-            continue;
-        }
-
-        const TaskMetadata& descendant = descendantIt->second;
-        if (!descendant.state.isCompleted) {
-            return true;
-        }
-
-        auto childIt = childUidsByParentUid.find(descendantUid);
-        if (childIt != childUidsByParentUid.end()) {
-            pending.insert(pending.end(), childIt->second.begin(), childIt->second.end());
-        }
-    }
-
-    return false;
-}
-
 bool hasIcsExtension(const fs::path& path) {
     if (!path.has_extension()) {
         return false;
@@ -348,6 +278,55 @@ bool shouldMove(const TaskState& task, std::chrono::sys_days todayUtc, int thres
     return ageDays > thresholdDays;
 }
 
+bool connectedTreeHasNotOldEnoughTask(
+    const TaskMetadata& task,
+    const std::unordered_map<std::string, std::vector<std::string>>& adjacentUidsByUid,
+    const std::unordered_map<std::string, TaskMetadata>& metadataByUid,
+    std::chrono::sys_days todayUtc,
+    int thresholdDays) {
+    if (task.uid.empty()) {
+        return false;
+    }
+
+    if (!shouldMove(task.state, todayUtc, thresholdDays)) {
+        return true;
+    }
+
+    std::vector<std::string> pending;
+    if (auto it = adjacentUidsByUid.find(task.uid); it != adjacentUidsByUid.end()) {
+        pending = it->second;
+    }
+
+    std::unordered_set<std::string> visited;
+    visited.insert(task.uid);
+
+    while (!pending.empty()) {
+        std::string relatedUid = pending.back();
+        pending.pop_back();
+
+        if (relatedUid.empty() || !visited.insert(relatedUid).second) {
+            continue;
+        }
+
+        auto relatedIt = metadataByUid.find(relatedUid);
+        if (relatedIt == metadataByUid.end()) {
+            continue;
+        }
+
+        const TaskMetadata& related = relatedIt->second;
+        if (!shouldMove(related.state, todayUtc, thresholdDays)) {
+            return true;
+        }
+
+        auto adjacentIt = adjacentUidsByUid.find(relatedUid);
+        if (adjacentIt != adjacentUidsByUid.end()) {
+            pending.insert(pending.end(), adjacentIt->second.begin(), adjacentIt->second.end());
+        }
+    }
+
+    return false;
+}
+
 int run(const Config& cfg) {
     if (!fs::exists(cfg.sourceDir) || !fs::is_directory(cfg.sourceDir)) {
         std::cerr << "Source directory does not exist or is not a directory: " << cfg.sourceDir << "\n";
@@ -407,7 +386,7 @@ int run(const Config& cfg) {
     size_t skipped = 0;
     std::unordered_map<std::string, TaskMetadata> metadataByPath;
     std::unordered_map<std::string, TaskMetadata> metadataByUid;
-    std::unordered_map<std::string, std::vector<std::string>> childUidsByParentUid;
+    std::unordered_map<std::string, std::vector<std::string>> adjacentUidsByUid;
 
     for (const auto& filePath : taskFiles) {
         try {
@@ -425,13 +404,15 @@ int run(const Config& cfg) {
     for (const auto& [uid, metadata] : metadataByUid) {
         for (const auto& parentUid : metadata.parentUids) {
             if (!parentUid.empty()) {
-                childUidsByParentUid[parentUid].push_back(uid);
+                adjacentUidsByUid[uid].push_back(parentUid);
+                adjacentUidsByUid[parentUid].push_back(uid);
             }
         }
 
         for (const auto& childUid : metadata.childUids) {
             if (!childUid.empty()) {
-                childUidsByParentUid[uid].push_back(childUid);
+                adjacentUidsByUid[uid].push_back(childUid);
+                adjacentUidsByUid[childUid].push_back(uid);
             }
         }
     }
@@ -450,11 +431,7 @@ int run(const Config& cfg) {
             return;
         }
 
-        if (hasIncompleteAncestor(metadata, metadataByUid)) {
-            return;
-        }
-
-        if (hasIncompleteDescendant(metadata, childUidsByParentUid, metadataByUid)) {
+        if (connectedTreeHasNotOldEnoughTask(metadata, adjacentUidsByUid, metadataByUid, today, cfg.daysThreshold)) {
             return;
         }
 
