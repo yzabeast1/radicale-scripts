@@ -1,0 +1,11 @@
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Old Tasks Fixture//EN
+BEGIN:VTODO
+UID:descendant-grandchild-open
+DTSTAMP:20240101T000000Z
+SUMMARY:Incomplete grandchild task
+STATUS:IN-PROCESS
+RELATED-TO;RELTYPE=PARENT:descendant-child-completed
+END:VTODO
+END:VCALENDAR

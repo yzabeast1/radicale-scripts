@@ -1,0 +1,12 @@
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Old Tasks Fixture//EN
+BEGIN:VTODO
+UID:normal-hierarchy-child-completed
+DTSTAMP:20240101T000000Z
+SUMMARY:Completed child under completed root
+STATUS:COMPLETED
+COMPLETED:20240108T000000Z
+RELATED-TO;RELTYPE=PARENT:normal-hierarchy-root-completed
+END:VTODO
+END:VCALENDAR

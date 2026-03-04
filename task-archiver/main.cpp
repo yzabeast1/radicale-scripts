@@ -9,6 +9,8 @@
 #include <stdexcept>
 #include <string>
 #include <string_view>
+#include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 namespace fs = std::filesystem;
@@ -101,6 +103,13 @@ struct TaskState {
     std::optional<std::chrono::sys_days> completedDate;
 };
 
+struct TaskMetadata {
+    TaskState state;
+    std::string uid;
+    std::vector<std::string> parentUids;
+    std::vector<std::string> childUids;
+};
+
 TaskState parseTaskState(const fs::path& filePath) {
     TaskState result;
     auto lines = readUnfoldedLines(filePath);
@@ -129,6 +138,130 @@ TaskState parseTaskState(const fs::path& filePath) {
     }
 
     return result;
+}
+
+TaskMetadata parseTaskMetadata(const fs::path& filePath) {
+    TaskMetadata result;
+    auto lines = readUnfoldedLines(filePath);
+
+    for (const auto& originalLine : lines) {
+        std::string lineUpper = toUpperCopy(originalLine);
+
+        if (startsWith(lineUpper, "STATUS:")) {
+            std::string status = trim(lineUpper.substr(std::string("STATUS:").size()));
+            if (status == "COMPLETED") {
+                result.state.isCompleted = true;
+            }
+            continue;
+        }
+
+        if (startsWith(lineUpper, "COMPLETED") && lineUpper.find(':') != std::string::npos) {
+            size_t colonPos = originalLine.find(':');
+            if (colonPos != std::string::npos) {
+                auto parsed = parseCompletedDateValue(originalLine.substr(colonPos + 1));
+                if (parsed.has_value()) {
+                    result.state.completedDate = parsed;
+                }
+            }
+            continue;
+        }
+
+        size_t colonPos = originalLine.find(':');
+        if (colonPos == std::string::npos) {
+            continue;
+        }
+
+        std::string nameAndParamsUpper = toUpperCopy(originalLine.substr(0, colonPos));
+        std::string value = trim(originalLine.substr(colonPos + 1));
+
+        if ((nameAndParamsUpper == "UID" || startsWith(nameAndParamsUpper, "UID;")) && !value.empty()) {
+            result.uid = value;
+            continue;
+        }
+
+        if (nameAndParamsUpper == "RELATED-TO" || startsWith(nameAndParamsUpper, "RELATED-TO;")) {
+            bool hasReltype = nameAndParamsUpper.find("RELTYPE=") != std::string::npos;
+            bool isParent = nameAndParamsUpper.find("RELTYPE=PARENT") != std::string::npos;
+            bool isChild = nameAndParamsUpper.find("RELTYPE=CHILD") != std::string::npos;
+            if ((!hasReltype || isParent) && !value.empty()) {
+                result.parentUids.push_back(value);
+            } else if (isChild && !value.empty()) {
+                result.childUids.push_back(value);
+            }
+        }
+    }
+
+    return result;
+}
+
+bool hasIncompleteAncestor(const TaskMetadata& task, const std::unordered_map<std::string, TaskMetadata>& metadataByUid) {
+    std::vector<std::string> pending = task.parentUids;
+    std::unordered_set<std::string> visited;
+
+    while (!pending.empty()) {
+        std::string ancestorUid = pending.back();
+        pending.pop_back();
+
+        if (ancestorUid.empty() || !visited.insert(ancestorUid).second) {
+            continue;
+        }
+
+        auto it = metadataByUid.find(ancestorUid);
+        if (it == metadataByUid.end()) {
+            continue;
+        }
+
+        const TaskMetadata& ancestor = it->second;
+        if (!ancestor.state.isCompleted) {
+            return true;
+        }
+
+        pending.insert(pending.end(), ancestor.parentUids.begin(), ancestor.parentUids.end());
+    }
+
+    return false;
+}
+
+bool hasIncompleteDescendant(
+    const TaskMetadata& task,
+    const std::unordered_map<std::string, std::vector<std::string>>& childUidsByParentUid,
+    const std::unordered_map<std::string, TaskMetadata>& metadataByUid) {
+    if (task.uid.empty()) {
+        return false;
+    }
+
+    std::vector<std::string> pending;
+    if (auto it = childUidsByParentUid.find(task.uid); it != childUidsByParentUid.end()) {
+        pending = it->second;
+    }
+
+    std::unordered_set<std::string> visited;
+
+    while (!pending.empty()) {
+        std::string descendantUid = pending.back();
+        pending.pop_back();
+
+        if (descendantUid.empty() || !visited.insert(descendantUid).second) {
+            continue;
+        }
+
+        auto descendantIt = metadataByUid.find(descendantUid);
+        if (descendantIt == metadataByUid.end()) {
+            continue;
+        }
+
+        const TaskMetadata& descendant = descendantIt->second;
+        if (!descendant.state.isCompleted) {
+            return true;
+        }
+
+        auto childIt = childUidsByParentUid.find(descendantUid);
+        if (childIt != childUidsByParentUid.end()) {
+            pending.insert(pending.end(), childIt->second.begin(), childIt->second.end());
+        }
+    }
+
+    return false;
 }
 
 bool hasIcsExtension(const fs::path& path) {
@@ -232,11 +365,9 @@ int run(const Config& cfg) {
 
     auto today = currentDayUtc();
 
-    size_t scanned = 0;
-    size_t moved = 0;
-    size_t skipped = 0;
+    std::vector<fs::path> taskFiles;
 
-    auto handleFile = [&](const fs::path& filePath) {
+    auto considerFile = [&](const fs::path& filePath) {
         fs::path relative = fs::relative(filePath, cfg.sourceDir);
         if (!cfg.includeHidden && pathContainsHiddenParts(relative)) {
             return;
@@ -246,18 +377,84 @@ int run(const Config& cfg) {
             return;
         }
 
-        ++scanned;
+        taskFiles.push_back(filePath);
+    };
 
-        TaskState task;
+    if (cfg.recursive) {
+        for (fs::recursive_directory_iterator it(cfg.sourceDir), end; it != end; ++it) {
+            const auto& entry = *it;
+            if (!cfg.includeHidden && entry.is_directory()) {
+                fs::path relDir = fs::relative(entry.path(), cfg.sourceDir);
+                if (pathContainsHiddenParts(relDir)) {
+                    it.disable_recursion_pending();
+                    continue;
+                }
+            }
+            if (entry.is_regular_file()) {
+                considerFile(entry.path());
+            }
+        }
+    } else {
+        for (const auto& entry : fs::directory_iterator(cfg.sourceDir)) {
+            if (entry.is_regular_file()) {
+                considerFile(entry.path());
+            }
+        }
+    }
+
+    size_t scanned = taskFiles.size();
+    size_t moved = 0;
+    size_t skipped = 0;
+    std::unordered_map<std::string, TaskMetadata> metadataByPath;
+    std::unordered_map<std::string, TaskMetadata> metadataByUid;
+    std::unordered_map<std::string, std::vector<std::string>> childUidsByParentUid;
+
+    for (const auto& filePath : taskFiles) {
         try {
-            task = parseTaskState(filePath);
+            TaskMetadata metadata = parseTaskMetadata(filePath);
+            metadataByPath[filePath.string()] = metadata;
+            if (!metadata.uid.empty()) {
+                metadataByUid[metadata.uid] = metadata;
+            }
         } catch (const std::exception& ex) {
             std::cerr << "Skipping unreadable file " << filePath << ": " << ex.what() << "\n";
             ++skipped;
+        }
+    }
+
+    for (const auto& [uid, metadata] : metadataByUid) {
+        for (const auto& parentUid : metadata.parentUids) {
+            if (!parentUid.empty()) {
+                childUidsByParentUid[parentUid].push_back(uid);
+            }
+        }
+
+        for (const auto& childUid : metadata.childUids) {
+            if (!childUid.empty()) {
+                childUidsByParentUid[uid].push_back(childUid);
+            }
+        }
+    }
+
+    auto handleFile = [&](const fs::path& filePath) {
+        auto metaIt = metadataByPath.find(filePath.string());
+        if (metaIt == metadataByPath.end()) {
             return;
         }
 
-        if (!shouldMove(task, today, cfg.daysThreshold)) {
+        const TaskMetadata& metadata = metaIt->second;
+
+        fs::path relative = fs::relative(filePath, cfg.sourceDir);
+
+        if (!shouldMove(metadata.state, today, cfg.daysThreshold)) {
+            return;
+        }
+
+        if (hasIncompleteAncestor(metadata, metadataByUid)) {
+            return;
+        }
+
+        if (hasIncompleteDescendant(metadata, childUidsByParentUid, metadataByUid)) {
             return;
         }
 
@@ -304,26 +501,8 @@ int run(const Config& cfg) {
         ++moved;
     };
 
-    if (cfg.recursive) {
-        for (fs::recursive_directory_iterator it(cfg.sourceDir), end; it != end; ++it) {
-            const auto& entry = *it;
-            if (!cfg.includeHidden && entry.is_directory()) {
-                fs::path relDir = fs::relative(entry.path(), cfg.sourceDir);
-                if (pathContainsHiddenParts(relDir)) {
-                    it.disable_recursion_pending();
-                    continue;
-                }
-            }
-            if (entry.is_regular_file()) {
-                handleFile(entry.path());
-            }
-        }
-    } else {
-        for (const auto& entry : fs::directory_iterator(cfg.sourceDir)) {
-            if (entry.is_regular_file()) {
-                handleFile(entry.path());
-            }
-        }
+    for (const auto& filePath : taskFiles) {
+        handleFile(filePath);
     }
 
     std::cout << "\nScanned: " << scanned << " .ics files\n"

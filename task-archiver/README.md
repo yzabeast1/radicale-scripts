@@ -30,5 +30,37 @@ make
 
 - A task is treated as complete when `STATUS:COMPLETED` exists.
 - Completion date is read from the `COMPLETED:` property (supports date/datetime values like `20260301` or `20260301T101500Z`, date portion used).
+- A completed task is archived only when all known ancestors and descendants (`RELATED-TO` task chain) are also completed.
 - The relative folder structure under `--source` is preserved under `--archive`.
 - If a direct rename fails (for example across filesystems), the tool falls back to copy-then-remove.
+
+## Fixture test data
+
+Fixture `.ics` files are included under `test-data/source`.
+
+Run a dry run against them:
+
+```bash
+./task-archiver \
+  --source test-data/source \
+  --archive test-data/archive \
+  --days 30 \
+  --dry-run
+
+# or use the helper script
+./test-data/run-fixture-dry-run.sh
+```
+
+Expected to be moved:
+
+- `normal-standalone-completed.ics`
+- `normal-hierarchy-root-completed.ics`
+- `normal-hierarchy-child-completed.ics`
+- `normal-hierarchy-grandchild-completed.ics`
+
+Expected to stay (blocked by incomplete relatives):
+
+- `ancestor-parent-completed.ics`
+- `ancestor-child-completed.ics`
+- `descendant-root-completed.ics`
+- `descendant-child-completed.ics`

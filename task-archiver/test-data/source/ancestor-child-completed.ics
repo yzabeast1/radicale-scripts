@@ -1,0 +1,12 @@
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Old Tasks Fixture//EN
+BEGIN:VTODO
+UID:ancestor-child-completed
+DTSTAMP:20240101T000000Z
+SUMMARY:Completed child blocked by incomplete ancestor
+STATUS:COMPLETED
+COMPLETED:20240104T000000Z
+RELATED-TO;RELTYPE=PARENT:ancestor-parent-completed
+END:VTODO
+END:VCALENDAR
