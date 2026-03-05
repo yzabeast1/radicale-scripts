@@ -274,7 +274,6 @@ ConvertResult convert_one_file(const std::filesystem::path& input_path, const st
         std::smatch birthday_match;
         if (std::regex_search(card, birthday_match, birthday_re)) {
             const std::string birthday = normalized_date(birthday_match);
-            std::cout << name << " birthday: " << birthday << "\n";
             const std::string summary = name + "'s Birthday";
             const std::string uid_seed = "birthday|" + source_name + "|" + card_identity + "|" + birthday;
             birthday_events.push_back(make_event(birthday, summary, uid_seed));
@@ -286,7 +285,6 @@ ConvertResult convert_one_file(const std::filesystem::path& input_path, const st
             const std::string anniversary = normalized_date(anniversary_match);
             const std::string key = name + "|" + anniversary;
             if (anniversary_keys.insert(key).second) {
-                std::cout << name << " anniversary: " << anniversary << "\n";
                 const std::string summary = name + "'s Anniversary";
                 const std::string uid_seed = "anniversary|" + source_name + "|" + card_identity + "|" + anniversary;
                 anniversary_events.push_back(make_event(anniversary, summary, uid_seed));
@@ -298,7 +296,6 @@ ConvertResult convert_one_file(const std::filesystem::path& input_path, const st
         for (const auto& anniversary : ios_anniversaries) {
             const std::string key = name + "|" + anniversary;
             if (anniversary_keys.insert(key).second) {
-                std::cout << name << " anniversary: " << anniversary << "\n";
                 const std::string summary = name + "'s Anniversary";
                 const std::string uid_seed = "anniversary|" + source_name + "|" + card_identity + "|" + anniversary;
                 anniversary_events.push_back(make_event(anniversary, summary, uid_seed));
@@ -308,7 +305,6 @@ ConvertResult convert_one_file(const std::filesystem::path& input_path, const st
     }
 
     if (birthday_count == 0 && anniversary_count == 0) {
-        std::cout << "No birthday or anniversary found in " << input_path.filename() << ", skipping ICS creation\n";
         return ConvertResult::SkippedNoEvents;
     }
 
@@ -339,8 +335,6 @@ ConvertResult convert_one_file(const std::filesystem::path& input_path, const st
         if (!write_calendar(birthdays_output, birthday_events)) {
             return ConvertResult::Failed;
         }
-        std::cout << "Created " << birthdays_output.filename() << " ("
-                  << birthday_count << " birthday event(s))\n";
     }
 
     if (anniversary_count > 0) {
@@ -348,8 +342,6 @@ ConvertResult convert_one_file(const std::filesystem::path& input_path, const st
         if (!write_calendar(anniversaries_output, anniversary_events)) {
             return ConvertResult::Failed;
         }
-        std::cout << "Created " << anniversaries_output.filename() << " ("
-                  << anniversary_count << " anniversary event(s))\n";
     }
 
     return ConvertResult::Converted;
