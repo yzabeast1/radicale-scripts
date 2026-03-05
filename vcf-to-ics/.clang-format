@@ -1,0 +1,18 @@
+---
+UseTab: Never
+IndentWidth: 4
+TabWidth: 4
+AllowShortIfStatementsOnASingleLine: AllIfsAndElse
+IndentCaseLabels: true
+ColumnLimit: 32767
+NamespaceIndentation: All
+FixNamespaceComments: false
+BreakBeforeBraces: Custom
+AllowShortEnumsOnASingleLine: false
+AllowShortCaseLabelsOnASingleLine: true
+AllowShortFunctionsOnASingleLine: Empty
+AllowShortLoopsOnASingleLine: true
+SeparateDefinitionBlocks: Always
+BraceWrapping:
+    BeforeCatch: true
+    BeforeElse: true
