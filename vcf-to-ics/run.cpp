@@ -11,11 +11,7 @@
 #include <vector>
 
 namespace {
-
-    constexpr const char *CONTACTS_DIR_SUFFIX = "/data/collections/collection-root/admin/f7046b23-2710-2ce4-26e5-486ff5829d56/";
-    constexpr const char *BIRTHDAYS_DIR_SUFFIX = "/data/collections/collection-root/admin/5afdfde6-6cc7-aa68-ac99-3b24e350db16/";
     constexpr const char *CALENDAR_NAME = "Birthdays";
-
     enum class ConvertResult {
         Converted,
         SkippedNoEvents,
@@ -32,10 +28,16 @@ namespace {
     RuntimeConfig config;
 
     void print_usage(const char *exe_name) {
-        std::cout << "Usage: " << exe_name << " [-v|--verbose] [--contacts-dir PATH] [--birthdays-dir PATH] [--calendar-name NAME]\n";
+        std::cout << "Usage: " << exe_name << " --contacts-dir PATH --birthdays-dir PATH --calendar-name NAME [-v|--verbose]\n";
     }
 
     bool parse_args(int argc, char *argv[], RuntimeConfig &config) {
+        if (argc <= 1) {
+            std::cerr << "Error: no arguments provided.\n";
+            print_usage(argv[0]);
+            return false;
+        }
+
         for (int index = 1; index < argc; ++index) {
             const std::string arg = argv[index];
             if ((arg == "-h") || (arg == "--help")) {
@@ -64,6 +66,12 @@ namespace {
             }
 
             std::cerr << "Unknown or incomplete argument: " << arg << "\n";
+            print_usage(argv[0]);
+            return false;
+        }
+
+        if (config.contacts_path.empty() || config.output_path.empty() || config.calendar_name.empty()) {
+            std::cerr << "Error: contacts directory, and birthdays directory are required.\n";
             print_usage(argv[0]);
             return false;
         }
@@ -365,8 +373,6 @@ namespace {
 
 int main(int argc, char *argv[]) {
     std::cout << "VCF to ICS Converter" << std::endl;
-    config.contacts_path = CONTACTS_DIR_SUFFIX;
-    config.output_path = BIRTHDAYS_DIR_SUFFIX;
     config.calendar_name = CALENDAR_NAME;
     if (!parse_args(argc, argv, config)) {
         return 1;
