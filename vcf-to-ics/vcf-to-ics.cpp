@@ -9,6 +9,7 @@
 #include <unordered_map>
 #include <unordered_set>
 #include <vector>
+const std::string UNKNOWN_YEAR = "1900";
 
 namespace {
     constexpr const char *CALENDAR_NAME = "Birthdays";
@@ -176,16 +177,16 @@ namespace {
     }
 
     std::string normalized_date(const std::smatch &match) {
-        if (match[1].str() == "-") {
-            return std::to_string(current_year()) + match[2].str() + match[3].str();
+        if (match[1].str() == "1604" || match[1].str() == "-") {
+            return UNKNOWN_YEAR + match[2].str() + match[3].str();
         }
         return match[1].str() + match[2].str() + match[3].str();
     }
 
     std::string normalized_date(const std::smatch &match, std::size_t year_index, std::size_t month_index, std::size_t day_index) {
         const std::string year = match[year_index].str();
-        if (year == "-") {
-            return std::to_string(current_year()) + match[month_index].str() + match[day_index].str();
+        if (year == "1604" || year == "-") {
+            return UNKNOWN_YEAR + match[month_index].str() + match[day_index].str();
         }
         return year + match[month_index].str() + match[day_index].str();
     }
@@ -260,7 +261,7 @@ namespace {
             return ConvertResult::Failed;
         }
 
-        const std::regex birthday_re(R"(BDAY(?:;VALUE=DATE)?:(-|\d{4})-?(\d{2})-?(\d{2}))", std::regex_constants::icase);
+        const std::regex birthday_re(R"(BDAY(?:;[^:\r\n]*)?:(-|\d{4})-?(\d{2})-?(\d{2}))", std::regex_constants::icase);
         const std::regex anniversary_re(R"((?:ANNIVERSARY|X-ANNIVERSARY)(?:;VALUE=DATE)?:(-|\d{4})-?(\d{2})-?(\d{2}))", std::regex_constants::icase);
         const std::regex name_re(R"(FN(?::|;[^:\r\n]*:)([^\r\n]*))", std::regex_constants::icase);
 
