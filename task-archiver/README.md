@@ -5,13 +5,13 @@ Moves completed CalDAV task files (`.ics`) from a source folder into an archive 
 ## Build
 
 ```bash
-make
+make task-archiver
 ```
 
 ## Usage
 
 ```bash
-./caldav_task_archiver \\
+./task-archiver/task-archiver \\
   --source /path/to/caldav/tasks \
   --archive /path/to/archive \
   --days 30
@@ -41,7 +41,9 @@ Fixture `.ics` files are included under `test-data/source`.
 Run a dry run against them:
 
 ```bash
-./task-archiver \
+make task-archiver
+
+./task-archiver/task-archiver \
   --source test-data/source \
   --archive test-data/archive \
   --days 30 \

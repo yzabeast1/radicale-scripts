@@ -5,7 +5,7 @@ Normalizes anniversary fields in vCard contact files (`.vcf`) inside a folder.
 ## Build
 
 ```bash
-make
+make anniversary-fixer
 ```
 
 ## Usage
