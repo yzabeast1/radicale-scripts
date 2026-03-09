@@ -177,7 +177,7 @@ namespace {
     }
 
     std::string normalized_date(const std::smatch &match) {
-        if (match[1].str() == "1604" || match[1].str() == "-") {
+        if (match[1].str() == "1604" || match[1].str() == "0001" || match[1].str() == "-") {
             return UNKNOWN_YEAR + match[2].str() + match[3].str();
         }
         return match[1].str() + match[2].str() + match[3].str();
@@ -185,7 +185,7 @@ namespace {
 
     std::string normalized_date(const std::smatch &match, std::size_t year_index, std::size_t month_index, std::size_t day_index) {
         const std::string year = match[year_index].str();
-        if (year == "1604" || year == "-") {
+        if (year == "1604" || year == "0001" || year == "-") {
             return UNKNOWN_YEAR + match[month_index].str() + match[day_index].str();
         }
         return year + match[month_index].str() + match[day_index].str();
