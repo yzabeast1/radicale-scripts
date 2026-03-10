@@ -20,9 +20,9 @@ make anniversary-fixer
   - `item1.X-ABDATE:<anniversary-value formatted as YYYY-MM-DD>`
   - `item1.X-ABLABEL:_$!<Anniversary>!$_`
 - If a contact has `item1.X-ABDATE` but no `ANNIVERSARY`, add:
-  - `ANNIVERSARY:<item1-date-value formatted as YYYYMMDD>`
+  - `ANNIVERSARY:<item1-date-value formatted as YYYY-MM-DD>`
 - If both exist and values match, leave unchanged.
 - If both exist and differ, trust `item1.X-ABDATE` and overwrite `ANNIVERSARY`.
-- Output is normalized so `ANNIVERSARY` uses `YYYYMMDD` and `item1.X-ABDATE` uses `YYYY-MM-DD`.
+- Output is normalized so `ANNIVERSARY` uses `YYYY-MM-DD` and `item1.X-ABDATE` uses `YYYY-MM-DD`.
 
 Only `.vcf` files in the given folder are processed.

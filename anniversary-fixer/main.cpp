@@ -67,7 +67,7 @@ std::optional<std::string> normalizeAnniversaryValue(const std::string &value) {
         return std::nullopt;
     }
 
-    return digits;
+    return digits.substr(0, 4) + "-" + digits.substr(4, 2) + "-" + digits.substr(6, 2);
 }
 
 std::optional<std::string> normalizeItem1DateValue(const std::string &value) {
