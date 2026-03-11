@@ -1,6 +1,8 @@
 #include <algorithm>
 #include <cctype>
 #include <chrono>
+#include <cstdlib>
+#include <ctime>
 #include <filesystem>
 #include <fstream>
 #include <iostream>
@@ -47,8 +49,64 @@ std::string toUpperCopy(std::string input) {
     return input;
 }
 
+bool isBasicUtcDateTime(const std::string &value) {
+    if (value.size() != 16 || value[8] != 'T' || value[15] != 'Z') {
+        return false;
+    }
+
+    auto isDigit = [](char c) { return std::isdigit(static_cast<unsigned char>(c)) != 0; };
+    for (size_t i = 0; i < value.size(); ++i) {
+        if (i == 8 || i == 15) {
+            continue;
+        }
+        if (!isDigit(value[i])) {
+            return false;
+        }
+    }
+
+    return true;
+}
+
+std::optional<std::chrono::sys_days> localDayFromUtcDateTime(const std::string &value) {
+    int parsedYear = std::stoi(value.substr(0, 4));
+    int parsedMonth = std::stoi(value.substr(4, 2));
+    int parsedDay = std::stoi(value.substr(6, 2));
+    int parsedHour = std::stoi(value.substr(9, 2));
+    int parsedMinute = std::stoi(value.substr(11, 2));
+    int parsedSecond = std::stoi(value.substr(13, 2));
+
+    std::tm utcTimeParts{};
+    utcTimeParts.tm_year = parsedYear - 1900;
+    utcTimeParts.tm_mon = parsedMonth - 1;
+    utcTimeParts.tm_mday = parsedDay;
+    utcTimeParts.tm_hour = parsedHour;
+    utcTimeParts.tm_min = parsedMinute;
+    utcTimeParts.tm_sec = parsedSecond;
+
+    std::time_t utcTime = timegm(&utcTimeParts);
+    std::tm localTimeParts{};
+    if (localtime_r(&utcTime, &localTimeParts) == nullptr) {
+        return std::nullopt;
+    }
+
+    using namespace std::chrono;
+    year_month_day ymd{
+        std::chrono::year{localTimeParts.tm_year + 1900},
+        std::chrono::month{static_cast<unsigned>(localTimeParts.tm_mon + 1)},
+        std::chrono::day{static_cast<unsigned>(localTimeParts.tm_mday)}};
+    if (!ymd.ok()) {
+        return std::nullopt;
+    }
+
+    return sys_days{ymd};
+}
+
 std::optional<std::chrono::sys_days> parseCompletedDateValue(const std::string &valueRaw) {
     std::string value = trim(valueRaw);
+    if (isBasicUtcDateTime(value)) {
+        return localDayFromUtcDateTime(value);
+    }
+
     if (value.size() < 8) {
         return std::nullopt;
     }
@@ -268,28 +326,37 @@ std::optional<Config> parseArgs(int argc, char *argv[]) {
     return cfg;
 }
 
-std::chrono::sys_days currentDayUtc() {
+std::chrono::sys_days currentLocalDay() {
+    std::time_t now = std::time(nullptr);
+    std::tm localNow{};
+    if (localtime_r(&now, &localNow) == nullptr) {
+        throw std::runtime_error("Could not determine current local date");
+    }
+
     using namespace std::chrono;
-    auto now = system_clock::now();
-    return floor<days>(now);
+    year_month_day ymd{
+        std::chrono::year{localNow.tm_year + 1900},
+        std::chrono::month{static_cast<unsigned>(localNow.tm_mon + 1)},
+        std::chrono::day{static_cast<unsigned>(localNow.tm_mday)}};
+    return sys_days{ymd};
 }
 
-bool shouldMove(const TaskState &task, std::chrono::sys_days todayUtc, int thresholdDays) {
+bool shouldMove(const TaskState &task, std::chrono::sys_days todayLocal, int thresholdDays) {
     if (!task.isCompleted || !task.completedDate.has_value()) {
         return false;
     }
 
-    auto age = todayUtc - task.completedDate.value();
+    auto age = todayLocal - task.completedDate.value();
     auto ageDays = std::chrono::duration_cast<std::chrono::days>(age).count();
     return ageDays > thresholdDays;
 }
 
-bool connectedTreeHasNotOldEnoughTask(const TaskMetadata &task, const std::unordered_map<std::string, std::vector<std::string>> &adjacentUidsByUid, const std::unordered_map<std::string, TaskMetadata> &metadataByUid, std::chrono::sys_days todayUtc, int thresholdDays) {
+bool connectedTreeHasNotOldEnoughTask(const TaskMetadata &task, const std::unordered_map<std::string, std::vector<std::string>> &adjacentUidsByUid, const std::unordered_map<std::string, TaskMetadata> &metadataByUid, std::chrono::sys_days todayLocal, int thresholdDays) {
     if (task.uid.empty()) {
         return false;
     }
 
-    if (!shouldMove(task.state, todayUtc, thresholdDays)) {
+    if (!shouldMove(task.state, todayLocal, thresholdDays)) {
         return true;
     }
 
@@ -315,7 +382,7 @@ bool connectedTreeHasNotOldEnoughTask(const TaskMetadata &task, const std::unord
         }
 
         const TaskMetadata &related = relatedIt->second;
-        if (!shouldMove(related.state, todayUtc, thresholdDays)) {
+        if (!shouldMove(related.state, todayLocal, thresholdDays)) {
             return true;
         }
 
@@ -343,7 +410,7 @@ int run(const Config &cfg) {
         }
     }
 
-    auto today = currentDayUtc();
+    auto today = currentLocalDay();
 
     std::vector<fs::path> taskFiles;
 
@@ -494,6 +561,7 @@ int run(const Config &cfg) {
 
 int main(int argc, char *argv[]) {
     std::cout << "CalDAV Task Archiver" << std::endl;
+    tzset();
     auto cfg = parseArgs(argc, argv);
     if (!cfg.has_value()) {
         printUsage(argv[0]);

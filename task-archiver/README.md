@@ -29,7 +29,9 @@ make task-archiver
 ## Notes
 
 - A task is treated as complete when `STATUS:COMPLETED` exists.
-- Completion date is read from the `COMPLETED:` property (supports date/datetime values like `20260301` or `20260301T101500Z`, date portion used).
+- Completion date is read from the `COMPLETED:` property.
+- UTC completion timestamps such as `20260301T101500Z` are converted into the current local day using the process time zone from `TZ` before age is calculated.
+- If `TZ` is unset, the process falls back to the system local time zone.
 - A completed task is archived only when all known tasks in its connected `RELATED-TO` tree are also old enough to pass the same `--days` threshold.
 - The relative folder structure under `--source` is preserved under `--archive`.
 - If a direct rename fails (for example across filesystems), the tool falls back to copy-then-remove.
