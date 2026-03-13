@@ -1,6 +1,6 @@
 # CalDAV Task Archiver (C++)
 
-Moves completed CalDAV task files (`.ics`) from a source folder into an archive folder when they were completed more than `N` days ago.
+Moves done CalDAV task files (`.ics`) from a source folder into an archive folder when they were completed more than `N` days ago.
 
 ## Build
 
@@ -28,7 +28,7 @@ make task-archiver
 
 ## Notes
 
-- A task is treated as complete when `STATUS:COMPLETED` exists.
+- A task is treated as done when `STATUS:COMPLETED` or `STATUS:CANCELLED` exists.
 - Completion date is read from the `COMPLETED:` property.
 - UTC completion timestamps such as `20260301T101500Z` are converted into the current local day using the process time zone from `TZ` before age is calculated.
 - If `TZ` is unset, the process falls back to the system local time zone.

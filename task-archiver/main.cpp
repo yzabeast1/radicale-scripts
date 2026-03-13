@@ -49,6 +49,10 @@ std::string toUpperCopy(std::string input) {
     return input;
 }
 
+bool isDoneStatus(const std::string &statusUpper) {
+    return statusUpper == "COMPLETED" || statusUpper == "CANCELLED";
+}
+
 bool isBasicUtcDateTime(const std::string &value) {
     if (value.size() != 16 || value[8] != 'T' || value[15] != 'Z') {
         return false;
@@ -176,7 +180,7 @@ TaskState parseTaskState(const fs::path &filePath) {
 
         if (startsWith(lineUpper, "STATUS:")) {
             std::string status = trim(lineUpper.substr(std::string("STATUS:").size()));
-            if (status == "COMPLETED") {
+            if (isDoneStatus(status)) {
                 result.isCompleted = true;
             }
             continue;
@@ -206,7 +210,7 @@ TaskMetadata parseTaskMetadata(const fs::path &filePath) {
 
         if (startsWith(lineUpper, "STATUS:")) {
             std::string status = trim(lineUpper.substr(std::string("STATUS:").size()));
-            if (status == "COMPLETED") {
+            if (isDoneStatus(status)) {
                 result.state.isCompleted = true;
             }
             continue;
@@ -279,7 +283,7 @@ void printUsage(const std::string &exeName) {
               << "  " << exeName << " --source <tasks_dir> --archive <archive_dir> --days <N> [--dry-run] [--no-recursive]\n\n"
               << "Options:\n"
               << "  --source <path>       Directory containing CalDAV task .ics files\n"
-              << "  --archive <path>      Directory where old completed tasks should be moved\n"
+              << "  --archive <path>      Directory where old done tasks should be moved\n"
               << "  --days <N>            Move tasks completed more than N days ago\n"
               << "  --dry-run             Print what would be moved without changing files\n"
               << "  --no-recursive        Only scan top-level of --source\n"
