@@ -106,18 +106,6 @@ namespace {
         return cards;
     }
 
-    int current_year() {
-        const auto now = std::chrono::system_clock::now();
-        const std::time_t now_time = std::chrono::system_clock::to_time_t(now);
-        std::tm local_time{};
-#if defined(_WIN32)
-        localtime_s(&local_time, &now_time);
-#else
-        localtime_r(&now_time, &local_time);
-#endif
-        return 1900 + local_time.tm_year;
-    }
-
     int hex_value(char ch) {
         if (ch >= '0' && ch <= '9') {
             return ch - '0';
