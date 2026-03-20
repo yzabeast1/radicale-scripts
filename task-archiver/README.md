@@ -29,7 +29,8 @@ make task-archiver
 ## Notes
 
 - A task is treated as done when `STATUS:COMPLETED` or `STATUS:CANCELLED` exists.
-- Completion date is read from the `COMPLETED:` property.
+- Completion/cancellation date is read from `COMPLETED:`, `CANCELLED:`, `CANCELLATION:`, or `CANCELATION:` when present.
+- If a done task has no explicit completion/cancellation timestamp, `DTSTAMP:` is used.
 - UTC completion timestamps such as `20260301T101500Z` are converted into the current local day using the process time zone from `TZ` before age is calculated.
 - If `TZ` is unset, the process falls back to the system local time zone.
 - A completed task is archived only when all known tasks in its connected `RELATED-TO` tree are also old enough to pass the same `--days` threshold.

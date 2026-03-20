@@ -12,6 +12,7 @@ expected_moved=(
   "normal-hierarchy-root-completed.ics"
   "normal-hierarchy-child-completed.ics"
   "normal-hierarchy-grandchild-completed.ics"
+  "mtime-fallback-completed.ics"
 )
 
 expected_stay=(
@@ -37,12 +38,12 @@ for file in "${expected_stay[@]}"; do
   fi
 done
 
-if ! grep -q "Scanned: 12 .ics files" <<< "$output"; then
+if ! grep -q "Scanned: 13 .ics files" <<< "$output"; then
   echo "ASSERTION FAILED: expected fixture scan count missing" >&2
   exit 1
 fi
 
-if ! grep -q "Moved:   4" <<< "$output"; then
+if ! grep -q "Moved:   5" <<< "$output"; then
   echo "ASSERTION FAILED: expected moved count missing" >&2
   exit 1
 fi

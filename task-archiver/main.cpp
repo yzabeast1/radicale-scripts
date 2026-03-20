@@ -173,6 +173,7 @@ struct TaskMetadata {
 
 TaskState parseTaskState(const fs::path &filePath) {
     TaskState result;
+    std::optional<std::chrono::sys_days> dtstampDate;
     auto lines = readUnfoldedLines(filePath);
 
     for (const auto &originalLine : lines) {
@@ -196,6 +197,32 @@ TaskState parseTaskState(const fs::path &filePath) {
             }
             continue;
         }
+
+        if ((startsWith(lineUpper, "CANCELLED") || startsWith(lineUpper, "CANCELLATION") || startsWith(lineUpper, "CANCELATION")) && lineUpper.find(':') != std::string::npos) {
+            size_t colonPos = originalLine.find(':');
+            if (colonPos != std::string::npos) {
+                auto parsed = parseCompletedDateValue(originalLine.substr(colonPos + 1));
+                if (parsed.has_value()) {
+                    result.completedDate = parsed;
+                }
+            }
+            continue;
+        }
+
+        if (startsWith(lineUpper, "DTSTAMP") && lineUpper.find(':') != std::string::npos) {
+            size_t colonPos = originalLine.find(':');
+            if (colonPos != std::string::npos) {
+                auto parsed = parseCompletedDateValue(originalLine.substr(colonPos + 1));
+                if (parsed.has_value()) {
+                    dtstampDate = parsed;
+                }
+            }
+            continue;
+        }
+    }
+
+    if (result.isCompleted && !result.completedDate.has_value()) {
+        result.completedDate = dtstampDate;
     }
 
     return result;
@@ -203,6 +230,7 @@ TaskState parseTaskState(const fs::path &filePath) {
 
 TaskMetadata parseTaskMetadata(const fs::path &filePath) {
     TaskMetadata result;
+    std::optional<std::chrono::sys_days> dtstampDate;
     auto lines = readUnfoldedLines(filePath);
 
     for (const auto &originalLine : lines) {
@@ -222,6 +250,28 @@ TaskMetadata parseTaskMetadata(const fs::path &filePath) {
                 auto parsed = parseCompletedDateValue(originalLine.substr(colonPos + 1));
                 if (parsed.has_value()) {
                     result.state.completedDate = parsed;
+                }
+            }
+            continue;
+        }
+
+        if ((startsWith(lineUpper, "CANCELLED") || startsWith(lineUpper, "CANCELLATION") || startsWith(lineUpper, "CANCELATION")) && lineUpper.find(':') != std::string::npos) {
+            size_t colonPos = originalLine.find(':');
+            if (colonPos != std::string::npos) {
+                auto parsed = parseCompletedDateValue(originalLine.substr(colonPos + 1));
+                if (parsed.has_value()) {
+                    result.state.completedDate = parsed;
+                }
+            }
+            continue;
+        }
+
+        if (startsWith(lineUpper, "DTSTAMP") && lineUpper.find(':') != std::string::npos) {
+            size_t colonPos = originalLine.find(':');
+            if (colonPos != std::string::npos) {
+                auto parsed = parseCompletedDateValue(originalLine.substr(colonPos + 1));
+                if (parsed.has_value()) {
+                    dtstampDate = parsed;
                 }
             }
             continue;
@@ -251,6 +301,10 @@ TaskMetadata parseTaskMetadata(const fs::path &filePath) {
                 result.childUids.push_back(value);
             }
         }
+    }
+
+    if (result.state.isCompleted && !result.state.completedDate.has_value()) {
+        result.state.completedDate = dtstampDate;
     }
 
     return result;
