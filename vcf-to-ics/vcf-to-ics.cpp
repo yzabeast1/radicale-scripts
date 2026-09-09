@@ -187,6 +187,7 @@ namespace {
               << "SUMMARY:" << summary << "\n"
               << "RRULE:FREQ=YEARLY\n"
               << "DURATION:P1D\n"
+              << "TRANSP:TRANSPARENT\n"
               << "UID:" << uid << "\n"
               << "END:VEVENT\n";
         return event.str();
